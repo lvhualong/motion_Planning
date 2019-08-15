@@ -1,3 +1,8 @@
+
+## large files
+*.pptx
+*.mp4
+
 # Prerequisites
 *.d
 
