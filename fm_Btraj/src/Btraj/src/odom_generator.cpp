@@ -27,6 +27,7 @@ void rcvPosCmdCallBack(const quadrotor_msgs::PositionCommand cmd)
 	_cmd    = cmd;
 }
 
+//仿真模型　收到什么pose命令，就发布为下一时刻的odom
 void pubOdom()
 {	
 	nav_msgs::Odometry odom;

@@ -64,8 +64,8 @@ Vector3d _map_origin;
 double _pt_max_x, _pt_min_x, _pt_max_y, _pt_min_y, _pt_max_z, _pt_min_z;
 int _max_x_id, _max_y_id, _max_z_id, _max_local_x_id, _max_local_y_id, _max_local_z_id;
 int _traj_id = 1;
-COLLISION_CELL _free_cell(0.0);
-COLLISION_CELL _obst_cell(1.0);
+COLLISION_CELL _free_cell(0.0);// 0 is free
+COLLISION_CELL _obst_cell(1.0);// 1 is 100% obstacle
 // ros related
 ros::Subscriber _map_sub, _pts_sub, _odom_sub;
 ros::Publisher _fm_path_vis_pub, _local_map_vis_pub, _inf_map_vis_pub, _corridor_vis_pub, _traj_vis_pub, _grid_path_vis_pub, _nodes_vis_pub, _traj_pub, _checkTraj_vis_pub, _stopTraj_vis_pub;
@@ -83,8 +83,8 @@ VectorXd _C, _Cv, _Ca, _Cj;
 quadrotor_msgs::PolynomialTrajectory _traj;
 ros::Time _start_time = ros::TIME_MAX;
 TrajectoryGenerator _trajectoryGenerator;
-CollisionMapGrid * collision_map       = new CollisionMapGrid();
-CollisionMapGrid * collision_map_local = new CollisionMapGrid();
+CollisionMapGrid * collision_map       = new CollisionMapGrid();//全局地图
+CollisionMapGrid * collision_map_local = new CollisionMapGrid();//局部地图
 gridPathFinder * path_finder           = new gridPathFinder();
 
 void rcvWaypointsCallback(const nav_msgs::Path & wp);
@@ -116,6 +116,8 @@ VectorXd getStateFromBezier(const MatrixXd & polyCoeff, double t_now, int seg_no
 Vector3d getPosFromBezier(const MatrixXd & polyCoeff, double t_now, int seg_now );
 quadrotor_msgs::PolynomialTrajectory getBezierTraj();
 
+
+
 void rcvOdometryCallbck(const nav_msgs::Odometry odom)
 {
     if (odom.header.frame_id != "uav") 
@@ -144,7 +146,13 @@ void rcvOdometryCallbck(const nav_msgs::Odometry odom)
     transform.setOrigin( tf::Vector3(_odom.pose.pose.position.x, _odom.pose.pose.position.y, _odom.pose.pose.position.z) );
     transform.setRotation(tf::Quaternion(0, 0, 0, 1.0));
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "quadrotor"));
+    // ROS_INFO_STREAM("broadcost quadrotor--> world tf, current pose" 
+    //                     << "x:" << _start_pt(0) << " "
+    //                     << "y:" << _start_pt(1) << " "
+    //                     << "z:" << _start_pt(2) << " " 
+    //                     );
 }
+
 
 void rcvWaypointsCallback(const nav_msgs::Path & wp)
 {     
@@ -159,7 +167,7 @@ void rcvWaypointsCallback(const nav_msgs::Path & wp)
     _has_target = true;
     _is_emerg   = true;
 
-    ROS_INFO("[Fast Marching Node] receive the way-points");
+    ROS_INFO_STREAM("[Fast Marching Node] receive the way-points: " << _end_pt.transpose());
 
     trajPlanning(); 
 }
@@ -168,20 +176,22 @@ Vector3d _local_origin;
 void rcvPointCloudCallBack(const sensor_msgs::PointCloud2 & pointcloud_map)
 {   
     pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::fromROSMsg(pointcloud_map, cloud);
+    pcl::fromROSMsg(pointcloud_map, cloud);//world frame obstacle point
     
     if((int)cloud.points.size() == 0)
         return;
 
-    delete collision_map_local;
+    delete collision_map_local;//local map
 
     ros::Time time_1 = ros::Time::now();
-    collision_map->RestMap();
+    //// reset ervery 3D voxel cell  ==> 0.0
+    collision_map->RestMap();// global map
     
     double local_c_x = (int)((_start_pt(0) - _x_local_size/2.0)  * _inv_resolution + 0.5) * _resolution;
     double local_c_y = (int)((_start_pt(1) - _y_local_size/2.0)  * _inv_resolution + 0.5) * _resolution;
     double local_c_z = (int)((_start_pt(2) - _z_local_size/2.0)  * _inv_resolution + 0.5) * _resolution;
 
+    //local map original  in the center
     _local_origin << local_c_x, local_c_y, local_c_z;
 
     Translation3d origin_local_translation( _local_origin(0), _local_origin(1), _local_origin(2));
@@ -194,29 +204,32 @@ void rcvPointCloudCallBack(const sensor_msgs::PointCloud2 & pointcloud_map)
     double _y_buffer_size = _y_local_size + _buffer_size;
     double _z_buffer_size = _z_local_size + _buffer_size;
 
+    // create  local map
     collision_map_local = new CollisionMapGrid(origin_local_transform, "world", _resolution, _x_buffer_size, _y_buffer_size, _z_buffer_size, _free_cell);
 
     vector<pcl::PointXYZ> inflatePts(20);
     pcl::PointCloud<pcl::PointXYZ> cloud_inflation;
-    pcl::PointCloud<pcl::PointXYZ> cloud_local;
+    pcl::PointCloud<pcl::PointXYZ> cloud_local;//局部地图内的点云
 
+    //对于点云中的每一个点，
     for (int idx = 0; idx < (int)cloud.points.size(); idx++)
     {   
         auto mk = cloud.points[idx];
         pcl::PointXYZ pt(mk.x, mk.y, mk.z);
-
+        //点不在局部地图的范围内
         if( fabs(pt.x - _start_pt(0)) > _x_local_size / 2.0 || fabs(pt.y - _start_pt(1)) > _y_local_size / 2.0 || fabs(pt.z - _start_pt(2)) > _z_local_size / 2.0 )
             continue; 
         
         cloud_local.push_back(pt);
         inflatePts = pointInflate(pt);
+        //对于每一个点膨胀出来的多个点
         for(int i = 0; i < (int)inflatePts.size(); i++)
         {   
             pcl::PointXYZ inf_pt = inflatePts[i];
             Vector3d addPt(inf_pt.x, inf_pt.y, inf_pt.z);
-            collision_map_local->Set3d(addPt, _obst_cell);
+            collision_map_local->Set3d(addPt, _obst_cell);//添加到局部地图和全局地图
             collision_map->Set3d(addPt, _obst_cell);
-            cloud_inflation.push_back(inf_pt);
+            cloud_inflation.push_back(inf_pt);//添加到膨胀的点云
         }
     }
     _has_map = true;
@@ -239,12 +252,15 @@ void rcvPointCloudCallBack(const sensor_msgs::PointCloud2 & pointcloud_map)
     _local_map_vis_pub.publish(localMap);
 
     ros::Time time_3 = ros::Time::now();
-    //ROS_WARN("Time in receving the map is %f", (time_3 - time_1).toSec());
+    // ROS_INFO_STREAM("cloud inflation size: " << cloud_inflation.points.size());
+    // ROS_INFO_STREAM("cloud_local size: " << cloud_local.points.size());
+    // ROS_WARN("Time in receving the map is %f", (time_3 - time_1).toSec());
 
     if( checkExecTraj() == true )
         trajPlanning(); 
 }
 
+//对于每一个点都进行膨胀，　pt点的前后左右上下
 vector<pcl::PointXYZ> pointInflate( pcl::PointXYZ pt)
 {
     int num   = int(_cloud_margin * _inv_resolution);
@@ -266,6 +282,9 @@ vector<pcl::PointXYZ> pointInflate( pcl::PointXYZ pt)
     return infPts;
 }
 
+/*
+
+*/
 bool checkExecTraj()
 {   
     if( _has_traj == false ) 
@@ -283,7 +302,7 @@ bool checkExecTraj()
     _stop_traj_vis.ns  = "trajectory/stop_trajectory";
 
     _stop_traj_vis.id     = _check_traj_vis.id = 0;
-    _stop_traj_vis.type   = _check_traj_vis.type = visualization_msgs::Marker::SPHERE_LIST;
+    _stop_traj_vis.type   = _check_traj_vis.type = visualization_msgs::Marker::SPHERE_LIST;//球形 list
     _stop_traj_vis.action = _check_traj_vis.action = visualization_msgs::Marker::ADD;
 
     _stop_traj_vis.scale.x = 2.0 * _vis_traj_width;
@@ -301,11 +320,13 @@ bool checkExecTraj()
 
     _stop_traj_vis.pose = _check_traj_vis.pose;
 
+    // stop是green的
     _stop_traj_vis.color.r = 0.0;
     _stop_traj_vis.color.g = 1.0;
     _stop_traj_vis.color.b = 0.0;
     _stop_traj_vis.color.a = 1.0;
 
+    //check 是bule的
     _check_traj_vis.color.r = 0.0;
     _check_traj_vis.color.g = 0.0;
     _check_traj_vis.color.b = 1.0;
@@ -330,6 +351,7 @@ bool checkExecTraj()
         {
             double t_d = duration + t - t_ss;
             if( t_d > _check_horizon ) break;
+
             traj_pt = getPosFromBezier( _bezier_coeff, t/_seg_time(i), i );
             pt.x = traj_pt(0) = _seg_time(i) * traj_pt(0); 
             pt.y = traj_pt(1) = _seg_time(i) * traj_pt(1);
@@ -809,7 +831,8 @@ void trajPlanning()
     if( _has_target == false || _has_map == false || _has_odom == false) 
         return;
 
-    vector<Cube> corridor;
+    vector<Cube> corridor;//用立方体表示的飞行走廊
+    //　fast marching 搜索路径模式
     if(_is_use_fm)
     {
         ros::Time time_1 = ros::Time::now();
@@ -1160,13 +1183,15 @@ void timeAllocation(vector<Cube> & corridor)
       }
 }
 
+
+// 轨迹搜索与轨迹优化
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "b_traj_node");
     ros::NodeHandle nh("~");
 
-    _map_sub  = nh.subscribe( "map",       1, rcvPointCloudCallBack );
-    _odom_sub = nh.subscribe( "odometry",  1, rcvOdometryCallbck);
+    _map_sub  = nh.subscribe( "map",       1, rcvPointCloudCallBack );//global obstacle pointcloud
+    _odom_sub = nh.subscribe( "odometry",  1, rcvOdometryCallbck);//
     _pts_sub  = nh.subscribe( "waypoints", 1, rcvWaypointsCallback );
 
     _inf_map_vis_pub   = nh.advertise<sensor_msgs::PointCloud2>("vis_map_inflate", 1);
@@ -1181,7 +1206,7 @@ int main(int argc, char** argv)
 
     _traj_pub = nh.advertise<quadrotor_msgs::PolynomialTrajectory>("trajectory", 10);
 
-    nh.param("map/margin",     _cloud_margin, 0.25);
+    nh.param("map/margin",     _cloud_margin, 0.25);//点云膨胀的距离
     nh.param("map/resolution", _resolution, 0.2);
     
     nh.param("map/x_size",       _x_size, 50.0);

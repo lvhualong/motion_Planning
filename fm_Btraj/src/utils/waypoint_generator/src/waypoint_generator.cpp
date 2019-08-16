@@ -16,7 +16,7 @@ using namespace std;
 using bfmt = boost::format;
 
 ros::Publisher pub1;
-ros::Publisher pub2;
+ros::Publisher pub2; //waypoints_vis
 ros::Publisher pub3;
 string waypoint_type = string("manual");
 bool is_odom_ready;
@@ -115,6 +115,7 @@ void publish_waypoints_vis() {
     pub2.publish(poseArray);
 }
 
+//
 void odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
     is_odom_ready = true;
     odom = *msg;

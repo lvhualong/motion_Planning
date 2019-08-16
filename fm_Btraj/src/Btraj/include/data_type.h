@@ -26,14 +26,14 @@ struct Cube
       double t; // time allocated to this cube
       std::vector< std::pair<double, double> > box;
 /*
-           P4------------P3 
+           P3------------P2 
            /|           /|              ^
           / |          / |              | z
-        P1--|---------P2 |              |
-         |  P8--------|--p7             |
+        P0--|---------P1 |              |
+         |  P7--------|--p6             |
          | /          | /               /--------> y
          |/           |/               /  
-        P5------------P6              / x
+        P4------------P5              / x
 */                                                                                 
 
       // create a cube using 8 vertex and the center point
@@ -47,9 +47,12 @@ struct Cube
       }
 
       // create a inscribe cube of a ball using the center point and the radius of the ball
+      // 根据分辨率每个顶点要往外扩半个分辨率
+      // M 8*3 每行一个顶点
       void setVertex( Eigen::MatrixXd vertex_, double resolution_)
       {     
             vertex = vertex_;
+            //ｙ方向
             vertex(0,1) -= resolution_ / 2.0;
             vertex(3,1) -= resolution_ / 2.0;
             vertex(4,1) -= resolution_ / 2.0;
@@ -60,6 +63,7 @@ struct Cube
             vertex(5,1) += resolution_ / 2.0;
             vertex(6,1) += resolution_ / 2.0;
 
+            //x 方向
             vertex(0,0) += resolution_ / 2.0;
             vertex(1,0) += resolution_ / 2.0;
             vertex(4,0) += resolution_ / 2.0;
@@ -69,7 +73,7 @@ struct Cube
             vertex(3,0) -= resolution_ / 2.0;
             vertex(6,0) -= resolution_ / 2.0;
             vertex(7,0) -= resolution_ / 2.0;
-
+            //z方向
             vertex(0,2) += resolution_ / 2.0;
             vertex(1,2) += resolution_ / 2.0;
             vertex(2,2) += resolution_ / 2.0;
@@ -83,13 +87,14 @@ struct Cube
             setBox();
       }
       
+      //　cube的三条边的长度差
       void setBox()
       {
             box.clear();
             box.resize(3);
-            box[0] = std::make_pair( vertex(3, 0), vertex(0, 0) );
-            box[1] = std::make_pair( vertex(0, 1), vertex(1, 1) );
-            box[2] = std::make_pair( vertex(4, 2), vertex(1, 2) );
+            box[0] = std::make_pair( vertex(3, 0), vertex(0, 0) );//x
+            box[1] = std::make_pair( vertex(0, 1), vertex(1, 1) );//y
+            box[2] = std::make_pair( vertex(4, 2), vertex(1, 2) );//z
       }
 
       void printBox()
@@ -110,6 +115,7 @@ struct Cube
 
       ~Cube(){}
 };
+
 
 struct GridNode
 {     

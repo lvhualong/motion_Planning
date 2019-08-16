@@ -45,6 +45,8 @@ sensor_msgs::PointCloud2 localMap_pcd;
 sensor_msgs::PointCloud2 globalMap_pcd;
 pcl::PointCloud<pcl::PointXYZ> cloudMap;
 
+
+//
 void RandomMapGenerate()
 {    
       pcl::PointXYZ pt_random;
@@ -157,10 +159,15 @@ void pubSensedPoints()
       _local_map_pub.publish(localMap_pcd);         
 }
 
+/*
+ * 设置参数
+ * 生成点云地图
+ * 发布点云
+*/
 int main (int argc, char** argv) {
         
       ros::init (argc, argv, "random_map_sensing");
-      ros::NodeHandle n( "~" );
+      ros::NodeHandle n( "~" );//random_map_sensing handle
 
       _local_map_pub = n.advertise<sensor_msgs::PointCloud2>("random_forest", 1);                      
       _all_map_pub   = n.advertise<sensor_msgs::PointCloud2>("all_map", 1);                      

@@ -621,6 +621,7 @@ namespace sdf_tools
             return filled_distance_field;
         }
 
+        // reset ervery voxel 0.0
         void RestMap()
         {
             // Reset components first
