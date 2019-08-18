@@ -78,4 +78,4 @@ roslaunch bezier_planer simulation.launch
       b.1 checkExecTraj()
             - traj_pt = getPosFromBezier( _bezier_coeff, t/_seg_time(i), i );
             - checkCoordObs(traj_pt)
-            - 然后发布check_trajectory，stop_trajectory两个轨迹
+            - 然后发布check_trajectory(绿色)，stop_trajectory(蓝色)两个轨迹
